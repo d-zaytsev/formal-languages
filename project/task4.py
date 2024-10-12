@@ -38,9 +38,6 @@ def is_front_not_empty(front: csr_matrix):
 def ms_bfs_based_rpq(
     regex: str, graph: MultiDiGraph, start_nodes: set[int], final_nodes: set[int]
 ) -> set[tuple[int, int]]:
-    # print(regex, start_nodes, final_nodes)
-    # print(graph.nodes, graph.edges)
-
     fa_regex: AdjacencyMatrixFA = AdjacencyMatrixFA(regex_to_dfa(regex))
     fa_graph: AdjacencyMatrixFA = AdjacencyMatrixFA(
         graph_to_nfa(graph, start_nodes, final_nodes)
