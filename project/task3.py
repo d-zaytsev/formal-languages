@@ -9,7 +9,7 @@ from networkx import MultiDiGraph
 from numpy.typing import NDArray
 from scipy.sparse import csr_array, kron
 from typing import Iterable
-from task2 import graph_to_nfa, regex_to_dfa
+from project.task2 import graph_to_nfa, regex_to_dfa
 
 
 class AdjacencyMatrixFA:
