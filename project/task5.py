@@ -11,7 +11,7 @@ from numpy.typing import NDArray
 from scipy.sparse import kron
 from task2 import graph_to_nfa, regex_to_dfa
 from functools import reduce
-from scipy.sparse import dok_matrix, lil_matrix, dia_matrix
+from scipy.sparse import dok_matrix, lil_matrix
 
 
 A = TypeVar("A")  # array type
