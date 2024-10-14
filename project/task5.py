@@ -11,6 +11,7 @@ from numpy.typing import NDArray
 from scipy.sparse import kron
 from task2 import graph_to_nfa, regex_to_dfa
 from functools import reduce
+from scipy.sparse import dok_matrix, lil_matrix, dia_matrix
 
 
 A = TypeVar("A")  # array type
@@ -87,24 +88,19 @@ class AdjacencyMatrixFA(Generic[A]):
             self.sparse_matrices[key] = array_type(matrices_dict[key], dtype=np.bool_)
 
     def transitive_сlosure(self) -> NDArray[np.bool_]:
-        adj_matrix: NDArray[np.bool_] = np.zeros(
-            shape=(self.states_count, self.states_count), dtype=np.bool_
-        )
+        if not self.sparse_matrices:
+            return np.eye(self.states_count, self.states_count, dtype=np.bool_)
 
-        for matrix in self.sparse_matrices.values():
-            adj_matrix = adj_matrix | matrix.toarray()
+        combined = sum(self.sparse_matrices.values())
+        combined.setdiag(True)
 
-        for start_node in self.start_states_is:
-            adj_matrix[start_node, start_node] = True
-
-        for k in range(self.states_count):
-            for i in range(self.states_count):
-                for j in range(self.states_count):
-                    adj_matrix[i][j] = adj_matrix[i][j] or (
-                        adj_matrix[i][k] and adj_matrix[k][j]
-                    )
-
-        return adj_matrix
+        transitive_closure = combined.toarray()
+        for power in range(2, self.states_count + 1):
+            prev = transitive_closure
+            transitive_closure = np.linalg.matrix_power(prev, power)
+            if np.array_equal(prev, transitive_closure):
+                break
+        return transitive_closure
 
 
 def intersect_automata(
@@ -192,6 +188,19 @@ def get_start_front(
     col = [st_state_i for st_state_i in fa_graph.start_states_is]
     data = [True] * graph_start_states_count
 
+    if matrix_type in [dok_matrix, lil_matrix]:
+        matrix = dok_matrix(
+            (
+                fa_regex.states_count * graph_start_states_count,
+                fa_graph.states_count,
+            ),
+            dtype=bool,
+        )
+
+        for i, r in enumerate(row):
+            matrix[r, col[i]] = data[i]
+        return matrix
+
     return matrix_type(
         (data, (row, col)),
         shape=(
@@ -276,5 +285,3 @@ def ms_bfs_based_rpq(
                 pairs.add(
                     (graph_start_state, fa_graph.states[graph_reached_state].value)
                 )
-
-    return pairs
