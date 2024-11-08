@@ -7,8 +7,8 @@ from pyformlang.finite_automaton import (
 import numpy as np
 from networkx import MultiDiGraph
 from numpy.typing import NDArray
-from scipy.sparse import csr_array, kron
-from typing import Iterable
+from scipy.sparse import csr_array, csr_matrix, kron
+from typing import Iterable, Set
 from project.task2 import graph_to_nfa, regex_to_dfa
 
 
@@ -25,8 +25,6 @@ class AdjacencyMatrixFA:
 
         if fa is None:
             return
-
-        isDeterministic = isinstance(fa, DeterministicFiniteAutomaton)
 
         # get FA transitions
         transitions_dict: dict = fa.to_dict()
@@ -63,7 +61,7 @@ class AdjacencyMatrixFA:
                 if sym not in matrices_dict:
                     matrices_dict[sym] = np.zeros(shape=matrix_shape, dtype=np.bool_)
 
-                if isDeterministic:
+                if not isinstance(dest, Set):
                     dest_node_i: int = self.states.index(dest)
 
                     matrices_dict[sym][source_node_i, dest_node_i] = True
@@ -121,28 +119,22 @@ class AdjacencyMatrixFA:
                 for next_state_i in next_states_is:
                     confs.append((next_state_i, cur_word[1:]))
 
-    def transitive_сlosure(self) -> NDArray[np.bool_]:
-        adj_matrix: NDArray[np.bool_] = np.zeros(
-            shape=(self.states_count, self.states_count), dtype=np.bool_
+    def transitive_сlosure(self) -> csr_matrix:
+        size = self.states_count
+
+        res = csr_matrix(
+            (np.ones(size, dtype=bool), (range(size), range(size))), shape=(size, size)
         )
 
         for matrix in self.sparse_matrices.values():
-            adj_matrix = adj_matrix | matrix.toarray()
+            res += matrix
+        for _ in range(size):
+            res = res.dot(res)
 
-        for start_node in self.start_states_is:
-            adj_matrix[start_node, start_node] = True
-
-        for k in range(self.states_count):
-            for i in range(self.states_count):
-                for j in range(self.states_count):
-                    adj_matrix[i][j] = adj_matrix[i][j] or (
-                        adj_matrix[i][k] and adj_matrix[k][j]
-                    )
-
-        return adj_matrix
+        return res
 
     def is_empty(self) -> bool:
-        matrix: NDArray[np.bool_] = self.transitive_сlosure()
+        matrix: csr_matrix = self.transitive_сlosure()
 
         for start_node in self.start_states_is:
             for final_node in self.final_states_is:
