@@ -1,16 +1,35 @@
-from antlr4 import *
-from parser.GraphLexer import GraphLexer
-from parser.GraphParser import GraphParser
+from antlr4 import CommonTokenStream, ParserRuleContext, InputStream, TerminalNode
+from project.task11.parser.GraphLexer import GraphLexer
+from project.task11.parser.GraphParser import GraphParser
+from antlr4.error.ErrorListener import ErrorListener
+
+
+#
+class MyErrorListener(ErrorListener):
+    def syntaxError(self, recognizer, offendingSymbol, line, column, msg, e):
+        raise Exception(f"error while parsing ({line},{column}): {msg}\n")
+
 
 def program_to_tree(program: str) -> tuple[ParserRuleContext, bool]:
-    try:
-        lexer = GraphLexer(InputStream(program))
-        stream = CommonTokenStream(lexer)
-        parser = GraphParser(stream)
+    program = program.replace("<EOF>", "EOF")
+    error_listener = MyErrorListener()
 
-        return (parser.prog(), True)
-    except Exception:
+    lexer = GraphLexer(InputStream(program))
+    stream = CommonTokenStream(lexer)
+    parser = GraphParser(stream)
+
+    lexer.addErrorListener(error_listener)
+    parser.addErrorListener(error_listener)
+
+    try:
+        tree = parser.prog()
+
+        return (tree, True)
+    except Exception as e:
+        print(e)
+
         return (None, False)
+
 
 def nodes_count(tree: ParserRuleContext) -> int:
     count = 1
@@ -30,14 +49,19 @@ def tree_to_program(tree: ParserRuleContext) -> str:
     return result
 
 
-if __name__ == '__main__':
-    program = input("-> ")
-    lexer = GraphLexer(InputStream(program))
-    stream = CommonTokenStream(lexer)
-    parser = GraphParser(stream)
+if __name__ == "__main__":
+    while True:
+        program = input("-> ")
 
-    tree = parser.prog()
+        if program == "exit":
+            break
 
-    print('Length:', nodes_count(tree))
-    print('Result:', tree.toStringTree(recog=parser))
-    print('Recovered text:', tree_to_program(tree))
+        lexer = GraphLexer(InputStream(program))
+        stream = CommonTokenStream(lexer)
+        parser = GraphParser(stream)
+
+        tree = parser.prog()
+
+        print("Length:", nodes_count(tree))
+        print("Result:", tree.toStringTree(recog=parser))
+        print("Recovered text:", tree_to_program(tree))

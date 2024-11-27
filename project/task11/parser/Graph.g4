@@ -19,12 +19,10 @@ set_expr : L_SQ_BRACKET expr (COMMA expr)* R_SQ_BRACKET ;
 
 edge_expr : L_PARENTHESIS expr COMMA expr COMMA expr R_PARENTHESIS ;
 
+// regexp = CHAR | VAR | '(' regexp ')' | (regexp '|' regexp) | (regexp '^' range) | (regexp '.' regexp) | (regexp '&' regexp)
 regexp: term ('|' term)*;
-
 term: factor (('.' | '&') factor)*;
-
-factor: primary ('^' range)?;
-
+factor: primary ('^' range)*;
 primary: CHAR | VAR_ID | '(' regexp ')';
 
 range : L_SQ_BRACKET NUM ELLIPSIS NUM? R_SQ_BRACKET ;
