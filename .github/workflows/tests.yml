@@ -22,12 +22,12 @@ jobs:
           enable-cache: true
 
       - name: Sync dependencies
-        run: |
-          source .venv/bin/activate
-          rye sync
+        run: rye sync
 
       - name: Use ANTLR
-        run: antlr4 -Dlanguage=Python3 project/task11/parser/Graph.g4
+        run: |
+          source .venv/bin/activate
+          antlr4 -Dlanguage=Python3 project/task11/parser/Graph.g4
 
       - name: Run tests
         run: python scripts/run_tests.py
