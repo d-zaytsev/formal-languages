@@ -5,32 +5,34 @@ prog : stmt* ;
 
 stmt : bind | add | remove | declare ;
 
-declare : LET VAR_ID IS GRAPH ;
+declare : LET var IS GRAPH ;
 
-bind : LET VAR_ID EQUAL expr ;
+bind : LET var EQUAL expr ;
 
-remove : REMOVE (VERTEX | EDGE | VERTICES) expr FROM VAR_ID ;
+remove : REMOVE (VERTEX | EDGE | VERTICES) expr FROM var ;
 
-add : ADD (VERTEX | EDGE) expr TO VAR_ID ;
+add : ADD (VERTEX | EDGE) expr TO var ;
 
-expr : NUM | CHAR | VAR_ID | edge_expr | set_expr | regexp | select ;
+expr : num | char | var | edge_expr | set_expr | regexp | select ;
 
 set_expr : L_SQ_BRACKET expr (COMMA expr)* R_SQ_BRACKET ;
 
 edge_expr : L_PARENTHESIS expr COMMA expr COMMA expr R_PARENTHESIS ;
 
-// regexp = CHAR | VAR | '(' regexp ')' | (regexp '|' regexp) | (regexp '^' range) | (regexp '.' regexp) | (regexp '&' regexp)
 regexp: term ('|' term)*;
 term: factor (('.' | '&') factor)*;
 factor: primary ('^' range)*;
-primary: CHAR | VAR_ID | '(' regexp ')';
+primary: char | var | '(' regexp ')';
 
-range : L_SQ_BRACKET NUM ELLIPSIS NUM? R_SQ_BRACKET ;
+range : L_SQ_BRACKET num ELLIPSIS num? R_SQ_BRACKET ;
 
-select : v_filter? v_filter? RETURN VAR_ID (COMMA VAR_ID)? WHERE VAR_ID REACHABLE FROM VAR_ID IN VAR_ID BY expr ;
+select : v_filter? v_filter? RETURN var (COMMA var)? WHERE var REACHABLE FROM var IN var BY expr ;
 
-v_filter : FOR VAR_ID IN expr ;
+v_filter : FOR var IN expr ;
 
+num: NUM ;
+char: CHAR ;
+var: VAR_ID ;
 
 // Lexer rules
 LET:            'let' ;

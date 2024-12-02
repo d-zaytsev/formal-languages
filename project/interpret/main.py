@@ -1,10 +1,10 @@
 from antlr4 import CommonTokenStream, ParserRuleContext, InputStream, TerminalNode
-from project.task11.parser.GraphLexer import GraphLexer
-from project.task11.parser.GraphParser import GraphParser
+from parser.GraphLexer import GraphLexer
+from parser.GraphParser import GraphParser
 from antlr4.error.ErrorListener import ErrorListener
+from infer.graph_typing import GraphTyping
 
 
-#
 class MyErrorListener(ErrorListener):
     def syntaxError(self, recognizer, offendingSymbol, line, column, msg, e):
         raise Exception(f"error while parsing ({line},{column}): {msg}\n")
@@ -49,6 +49,14 @@ def tree_to_program(tree: ParserRuleContext) -> str:
     return result
 
 
+def typing_program(program: str) -> bool:
+    pass
+
+
+def exec_program(program: str) -> dict[str, set[tuple]]:
+    pass
+
+
 if __name__ == "__main__":
     while True:
         program = input("-> ")
@@ -61,7 +69,9 @@ if __name__ == "__main__":
         parser = GraphParser(stream)
 
         tree = parser.prog()
+        typecheck = GraphTyping(tree)
 
         print("Length:", nodes_count(tree))
         print("Result:", tree.toStringTree(recog=parser))
         print("Recovered text:", tree_to_program(tree))
+        print("Typechecker: ", True)
