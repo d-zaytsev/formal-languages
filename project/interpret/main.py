@@ -1,8 +1,15 @@
-from antlr4 import CommonTokenStream, ParserRuleContext, InputStream, TerminalNode
+from antlr4 import (
+    CommonTokenStream,
+    ParserRuleContext,
+    InputStream,
+    ParseTreeWalker,
+)
 from parser.GraphLexer import GraphLexer
 from parser.GraphParser import GraphParser
 from antlr4.error.ErrorListener import ErrorListener
-from infer.graph_typing import GraphTyping
+
+# from infer.graph_typing import GraphTyping
+from utils.listener import NodesCountListener, ProgramTextListener
 
 
 class MyErrorListener(ErrorListener):
@@ -32,21 +39,17 @@ def program_to_tree(program: str) -> tuple[ParserRuleContext, bool]:
 
 
 def nodes_count(tree: ParserRuleContext) -> int:
-    count = 1
-    for child in tree.children:
-        if isinstance(child, ParserRuleContext):
-            count += nodes_count(child)
-    return count
+    listener = NodesCountListener()
+    ParseTreeWalker().walk(listener, tree)
+
+    return listener.nodes_count
 
 
 def tree_to_program(tree: ParserRuleContext) -> str:
-    result = ""
-    for child in tree.children:
-        if isinstance(child, TerminalNode):
-            result += child.getText() + " "
-        elif isinstance(child, ParserRuleContext):
-            result += tree_to_program(child)
-    return result
+    listener = ProgramTextListener()
+    ParseTreeWalker().walk(listener, tree)
+
+    return listener.program_text
 
 
 def typing_program(program: str) -> bool:
@@ -69,9 +72,11 @@ if __name__ == "__main__":
         parser = GraphParser(stream)
 
         tree = parser.prog()
-        typecheck = GraphTyping(tree)
+        # typecheck = GraphTyping(tree)
 
+        print()
         print("Length:", nodes_count(tree))
-        print("Result:", tree.toStringTree(recog=parser))
         print("Recovered text:", tree_to_program(tree))
         print("Typechecker: ", True)
+        print("---")
+        print("Result:", tree.toStringTree(recog=parser))
