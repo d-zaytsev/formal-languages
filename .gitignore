@@ -154,3 +154,7 @@ _minted-presentation/
 *.tokens
 *.java
 .antlr
+
+GraphLexer.py
+GraphListener.py
+GraphParser.py

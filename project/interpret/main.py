@@ -10,6 +10,7 @@ from antlr4.error.ErrorListener import ErrorListener
 
 # from infer.graph_typing import GraphTyping
 from utils.listener import NodesCountListener, ProgramTextListener
+from infer.typechecker import GraphLangTyper
 
 
 class MyErrorListener(ErrorListener):
@@ -72,11 +73,16 @@ if __name__ == "__main__":
         parser = GraphParser(stream)
 
         tree = parser.prog()
-        # typecheck = GraphTyping(tree)
+        typer = GraphLangTyper(tree)
 
-        print()
+        infer_result = typer.check_result()
+
         print("Length:", nodes_count(tree))
         print("Recovered text:", tree_to_program(tree))
-        print("Typechecker: ", True)
+        print("Typechecker:", "Good!" if infer_result else typer.get_error_message())
+
         print("---")
         print("Result:", tree.toStringTree(recog=parser))
+        print("Inferred variables:")
+        typer.print_variables()
+        print()

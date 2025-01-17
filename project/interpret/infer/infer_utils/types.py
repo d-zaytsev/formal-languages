@@ -1,4 +1,5 @@
-class InferType:
+class GraphLangType:
+    VERTEX = "vertex"
     EDGE = "edge"
     NUM = "num"
     CHAR = "char"
@@ -12,18 +13,18 @@ class VariableStore:
     """A wrapper class for managing variables."""
 
     def __init__(self):
-        self.__variable_types: dict[str, InferType] = {}
+        self.__variable_types: dict[str, GraphLangType] = {}
 
-    def add_variable(self, name: str, type: InferType):
+    def add_variable(self, name: str, type: GraphLangType):
         self.__variable_types[name] = type
 
-    def get_variable(self, name: str) -> InferType:
+    def get_variable(self, name: str) -> GraphLangType:
         return self.__variable_types[name]
 
     def contains_variable(self, name: str) -> bool:
-        return name in self.__variable_types
+        return name in self.__variable_types.keys()
 
-    def get_all_variables(self) -> dict[str, InferType]:
+    def get_all_variables(self) -> dict[str, GraphLangType]:
         return self.__variable_types.copy()
 
     def __len__(self) -> int:
@@ -46,4 +47,4 @@ class VariablesPrinter:
             return
 
         for var_name, var_type in self.__variables.get_all_variables().items():
-            print(f"- {var_name} => {var_type}")
+            print(f"    {var_name} => {var_type}")
