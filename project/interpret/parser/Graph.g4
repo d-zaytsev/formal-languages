@@ -19,12 +19,15 @@ set_expr : L_SQ_BRACKET expr (COMMA expr)* R_SQ_BRACKET ;
 
 edge_expr : L_PARENTHESIS expr COMMA expr COMMA expr R_PARENTHESIS ;
 
-regexp: term ('|' term)*;
-term: factor (('.' | '&') factor)*;
-factor: primary ('^' range)*;
-primary: char | var | '(' regexp ')';
+regexp: char
+        | var
+        | L_PARENTHESIS regexp R_PARENTHESIS
+        | regexp PIPE regexp
+        | regexp CIRCUMFLEX range
+        | regexp DOT regexp
+        | regexp AMPERSAND regexp;
 
-range : L_SQ_BRACKET num ELLIPSIS num? R_SQ_BRACKET ;
+range : L_SQ_BRACKET num ELLIPSIS? num? R_SQ_BRACKET ;
 
 select : v_filter? v_filter? RETURN var (COMMA var)? WHERE var REACHABLE FROM var IN var BY expr ;
 
