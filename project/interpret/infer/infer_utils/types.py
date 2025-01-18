@@ -7,6 +7,7 @@ class GraphLangType:
     FA = "FA"
     RSM = "RSM"
     SET = "SET"
+    UNKNOWN = "ERROR"
 
 
 class VariableStore:
@@ -16,6 +17,9 @@ class VariableStore:
         self.__variable_types: dict[str, GraphLangType] = {}
 
     def add_variable(self, name: str, type: GraphLangType):
+        assert (
+            type != GraphLangType.UNKNOWN
+        ), "Attempt to assign unknown type to variable"
         self.__variable_types[name] = type
 
     def get_variable(self, name: str) -> GraphLangType:
