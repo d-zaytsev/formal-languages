@@ -66,6 +66,9 @@ class GraphLangTyper:
         elif bind_expr_index == GraphParser.RULE_char:
             bind_result_type = GraphLangType.CHAR
 
+        elif bind_expr_index == GraphParser.RULE_set_expr:
+            bind_result_type = GraphLangType.SET
+
         elif bind_expr_index == GraphParser.RULE_var:
             assigned_variable = bind_expr_extr.getText()
             bind_result_type = self.__variables.get_variable(assigned_variable)
@@ -125,7 +128,9 @@ class GraphLangTyper:
             remove.getRuleIndex() == GraphParser.RULE_remove
         ), "remove infer accepts only 'remove' rule"
 
-        remove_type_keyword = remove.getChild(1).getText()  # 'edge' | 'vertex'
+        remove_type_keyword = remove.getChild(
+            1
+        ).getText()  # 'edge' | 'vertex' | 'vertices'
         removed_entity = remove.getChild(2)
         var_name = remove.getChild(4).getText()
 
@@ -137,15 +142,20 @@ class GraphLangTyper:
         if remove_type_keyword == "edge":
             if not self.__check_edge_type(removed_entity):
                 raise Exception(
-                    f"Illegal edge construction, it can't be removed from {var_name}"
+                    f"Illegal edge construction ({removed_entity.getText()}) , it can't be removed from {var_name}"
                 )
         elif remove_type_keyword == "vertex":
             if not self.__check_vertex_type(removed_entity):
                 raise Exception(
-                    f"Illegal vertex construction, it can't be removed from {var_name}"
+                    f"Illegal vertex construction ({removed_entity.getText()}), it can't be removed from {var_name}"
+                )
+        elif remove_type_keyword == "vertices":
+            if self.__check_vertices_type(removed_entity):
+                raise Exception(
+                    f"Illegal vertices construction ({removed_entity.getText()}), it can't be removed from {var_name}"
                 )
         else:
-            raise Exception("Can't recognize remove keyword (vertex or edge?)")
+            raise Exception(f"Can't recognize remove keyword: {remove_type_keyword}")
 
     def __get_regexp_type(self, regexp: ParserRuleContext) -> GraphLangType:
         assert (
@@ -178,18 +188,35 @@ class GraphLangTyper:
             else:
                 raise Exception(f"Can't recognize regexp: {regexp_value.getText()}")
 
-        elif child_count == 3 and regexp.getChild(0).getText() == "(" and regexp.getChild(2).getText():
+        elif (
+            child_count == 3
+            and regexp.getChild(0).getText() == "("
+            and regexp.getChild(2).getText()
+        ):
             regexp_in_brackets = regexp.getChild(1)
             return self.__get_regexp_type(regexp_in_brackets)
 
         elif child_count == 3:  # ()
             operator: str = regexp.getChild(1).getText()
-            left_regexp, right_regexp = regexp.getChild(0), regexp.getChild(2)
 
             if operator == "^":
-                # TODO !!!!!!!!!!!!!!!!
-                raise NotImplementedError("ADD ^ !!!")
+                left_regexp, right_range_exp = regexp.getChild(0), regexp.getChild(2)
+
+                left_regexp_type = self.__get_regexp_type(left_regexp)
+
+                if right_range_exp.getRuleIndex() != GraphParser.RULE_range:
+                    raise f"Type with {right_range_exp} index can't be used in Repeat (^) operation."
+
+                if left_regexp_type == GraphLangType.FA:
+                    return GraphLangType.FA
+                elif left_regexp_type == GraphLangType.RSM:
+                    return GraphLangType.RSM
+                else:
+                    raise f"Type {left_regexp_type} can't be in Repeat (^) operation."
+
             else:
+                left_regexp, right_regexp = regexp.getChild(0), regexp.getChild(2)
+
                 left_regexp_type, right_regexp_type = (
                     self.__get_regexp_type(left_regexp),
                     self.__get_regexp_type(right_regexp),
@@ -214,7 +241,9 @@ class GraphLangTyper:
                         left_regexp_type == GraphLangType.RSM
                         and right_regexp_type == GraphLangType.RSM
                     ):
-                        raise Exception(f"Can't intersect two RSMs: \"{regexp.getText()}\".")
+                        raise Exception(
+                            f'Can\'t intersect two RSMs: "{regexp.getText()}".'
+                        )
 
                     return (
                         GraphLangType.RSM
@@ -236,6 +265,26 @@ class GraphLangTyper:
         vertex = self.__extract_value_from_expr(expr)
 
         return self.__check_num_type(vertex)
+
+    def __check_vertices_type(self, expr: ParserRuleContext) -> bool:
+        assert (
+            expr.getRuleIndex() == GraphParser.RULE_expr
+        ), "__check_vertices_type accepts only 'expr' rule"
+
+        vertices = self.__extract_value_from_expr(expr)
+
+        if vertices.getRuleIndex() == GraphParser.RULE_set_expr:
+            return True
+        if vertices.getRuleIndex() == GraphParser.RULE_var:
+            var_name = vertices.getText()
+
+            if (
+                self.__variables.contains_variable(var_name)
+                and self.__variables.get_variable(var_name) == GraphLangType.SET
+            ):
+                return True
+
+        return False
 
     def __check_edge_type(self, expr: ParserRuleContext) -> bool:
         assert (
