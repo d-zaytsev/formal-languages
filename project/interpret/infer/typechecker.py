@@ -46,7 +46,7 @@ class GraphLangTyper:
             elif stmt_child_index == GraphParser.RULE_remove:
                 self.__remove_infer(stmt_child)
             else:
-                raise Exception("Can't recognize statement")
+                raise Exception(f"Can't recognize statement {stmt_child.getText()}")
 
     def __bind_infer(self, bind: ParserRuleContext):
         assert (
@@ -55,45 +55,13 @@ class GraphLangTyper:
 
         var_name: str = bind.getChild(1).getText()
         bind_expr = bind.getChild(3)
-        bind_expr_extr: ParserRuleContext = self.__extract_value_from_expr(bind_expr)
-        bind_expr_index = bind_expr_extr.getRuleIndex()
+        bind_expr_type = self.__get_expr_type(bind_expr)
 
-        bind_result_type = GraphLangType.UNKNOWN
-
-        if bind_expr_index == GraphParser.RULE_num:
-            bind_result_type = GraphLangType.NUM
-
-        elif bind_expr_index == GraphParser.RULE_char:
-            bind_result_type = GraphLangType.CHAR
-
-        elif bind_expr_index == GraphParser.RULE_set_expr:
-            bind_result_type = GraphLangType.SET
-
-        elif bind_expr_index == GraphParser.RULE_var:
-            assigned_variable = bind_expr_extr.getText()
-            bind_result_type = self.__variables.get_variable(assigned_variable)
-
-        elif bind_expr_index == GraphParser.RULE_edge_expr:
-            edge_check_result = self.__check_edge_type(bind_expr)
-
-            if not edge_check_result:
-                raise Exception(
-                    f"Illegal edge construction. It can't be assigned to '{var_name}'"
-                )
-            bind_result_type = GraphLangType.EDGE
-
-        elif bind_expr_index == GraphParser.RULE_regexp:
-            bind_result_type = self.__get_regexp_type(bind_expr_extr)
-
-        else:
-            raise Exception(
-                f"Rule with index {bind_expr_index} is not possible in BIND"
-            )
-
-        self.__variables.add_variable(var_name, bind_result_type)
+        self.__variables.add_variable(var_name, bind_expr_type)
 
     def __declare_infer(self, declare: ParserRuleContext):
         var_name = declare.getChild(1).getText()
+
         self.__variables.add_variable(var_name, GraphLangType.GRAPH)
 
     def __add_infer(self, add: ParserRuleContext):
@@ -103,22 +71,23 @@ class GraphLangTyper:
 
         add_type_keyword = add.getChild(1).getText()  # 'edge' | 'vertex'
         added_entity = add.getChild(2)
+        added_entity_type = self.__get_expr_type(added_entity)
         var_name = add.getChild(4).getText()
 
         if not self.__check_var_type(var_name, GraphLangType.GRAPH):
             raise Exception(
-                f"Variable {var_name} have to be GRAPH, not {self.__variables.get_variable(var_name)}!"
+                f"Variable '{var_name}' have to be GRAPH, not '{self.__variables.get_variable(var_name)}'!"
             )
 
         if add_type_keyword == "edge":
-            if not self.__check_edge_type(added_entity):
+            if added_entity_type != GraphLangType.EDGE:
                 raise Exception(
-                    f"Illegal edge construction, it can't be added to {var_name}"
+                    f"Illegal edge construction, it can't be added to '{var_name}'"
                 )
         elif add_type_keyword == "vertex":
-            if not self.__check_vertex_type(added_entity):
+            if added_entity_type != GraphLangType.NUM:
                 raise Exception(
-                    f"Illegal vertex construction, it can't be added to {var_name}"
+                    f"Illegal vertex construction, it can't be added to '{var_name}'"
                 )
         else:
             raise Exception("Can't recognize add keyword (vertex or edge?)")
@@ -132,6 +101,7 @@ class GraphLangTyper:
             1
         ).getText()  # 'edge' | 'vertex' | 'vertices'
         removed_entity = remove.getChild(2)
+        removed_entity_type = self.__get_expr_type(removed_entity)
         var_name = remove.getChild(4).getText()
 
         if not self.__check_var_type(var_name, GraphLangType.GRAPH):
@@ -140,27 +110,68 @@ class GraphLangTyper:
             )
 
         if remove_type_keyword == "edge":
-            if not self.__check_edge_type(removed_entity):
+            if removed_entity_type != GraphLangType.EDGE:
                 raise Exception(
-                    f"Illegal edge construction ({removed_entity.getText()}) , it can't be removed from {var_name}"
+                    f"Illegal edge construction ({removed_entity.getText()}) , it can't be removed from '{var_name}'"
                 )
         elif remove_type_keyword == "vertex":
-            if not self.__check_vertex_type(removed_entity):
+            if removed_entity_type != GraphLangType.NUM:
                 raise Exception(
-                    f"Illegal vertex construction ({removed_entity.getText()}), it can't be removed from {var_name}"
+                    f"Illegal vertex construction ({removed_entity.getText()}), it can't be removed from '{var_name}'"
                 )
         elif remove_type_keyword == "vertices":
-            if self.__check_vertices_type(removed_entity):
+            if removed_entity_type != GraphLangType.SET:
                 raise Exception(
-                    f"Illegal vertices construction ({removed_entity.getText()}), it can't be removed from {var_name}"
+                    f"Illegal vertices construction ({removed_entity.getText()}), it can't be removed from '{var_name}'"
                 )
         else:
             raise Exception(f"Can't recognize remove keyword: {remove_type_keyword}")
 
+    def __get_expr_type(self, expr: ParserRuleContext) -> GraphLangType:
+        assert (
+            expr.getRuleIndex() == GraphParser.RULE_expr
+        ), f"get_expr_type accepts only 'expr' rule, not '{expr.getText()}'."
+
+        expr_value = self.__extract_value_from_expr(expr)
+        expr_value_index = expr_value.getRuleIndex()
+
+        if expr_value_index == GraphParser.RULE_num:
+            return GraphLangType.NUM
+
+        elif expr_value_index == GraphParser.RULE_char:
+            return GraphLangType.CHAR
+
+        elif expr_value_index == GraphParser.RULE_var:
+            var_name = expr_value.getText()
+            return self.__variables.get_variable(var_name)
+
+        elif expr_value_index == GraphParser.RULE_edge_expr:
+            edge_check_result = self.__check_edge_type(expr)
+
+            if not edge_check_result:
+                raise Exception(f"Incorrect edge construction: {expr_value.getText()}")
+            return GraphLangType.EDGE
+
+        elif expr_value_index == GraphParser.RULE_set_expr:
+            set_expr_check_result = self.__check_set_expr_type(expr)
+
+            if not set_expr_check_result:
+                raise Exception(
+                    f"Incorrect set expr construction: {expr_value.getText()}"
+                )
+
+            return GraphLangType.SET
+
+        elif expr_value_index == GraphParser.RULE_regexp:
+            return self.__get_regexp_type(expr_value)
+
+        else:
+            raise f"Can't recognize rule: {expr_value.getText()}"
+
     def __get_regexp_type(self, regexp: ParserRuleContext) -> GraphLangType:
         assert (
             regexp.getRuleIndex() == GraphParser.RULE_regexp
-        ), "check_regexp_type accepts only 'regexp' rule"
+        ), "get_regexp_type accepts only 'expr' rule"
 
         child_count = regexp.getChildCount()
 
@@ -257,60 +268,53 @@ class GraphLangTyper:
 
         return GraphLangType.UNKNOWN
 
-    def __check_vertex_type(self, expr: ParserRuleContext) -> bool:
+    def __check_set_expr_type(self, expr: ParserRuleContext) -> bool:
         assert (
             expr.getRuleIndex() == GraphParser.RULE_expr
-        ), "check_edge_type accepts only 'expr' rule"
+        ), "check_set_expr_type accepts only 'expr' rule"
 
-        vertex = self.__extract_value_from_expr(expr)
+        # 🐈🐈🐈
+        set_expr = self.__extract_value_from_expr(expr)
+        rule_index = set_expr.getRuleIndex()
 
-        return self.__check_num_type(vertex)
+        if rule_index == GraphParser.RULE_set_expr:
+            first_num_id = 1
+            last_num_id = set_expr.getChildCount() - 1
 
-    def __check_vertices_type(self, expr: ParserRuleContext) -> bool:
-        assert (
-            expr.getRuleIndex() == GraphParser.RULE_expr
-        ), "__check_vertices_type accepts only 'expr' rule"
+            for child_id in range(first_num_id, last_num_id):
+                child = set_expr.getChild(child_id)
 
-        vertices = self.__extract_value_from_expr(expr)
+                if child.getText() == ",":
+                    continue
 
-        if vertices.getRuleIndex() == GraphParser.RULE_set_expr:
+                if self.__get_expr_type(child) != GraphLangType.NUM:
+                    return False
+
             return True
-        if vertices.getRuleIndex() == GraphParser.RULE_var:
-            var_name = vertices.getText()
-
-            if (
-                self.__variables.contains_variable(var_name)
-                and self.__variables.get_variable(var_name) == GraphLangType.SET
-            ):
-                return True
-
-        return False
+        else:
+            return False
 
     def __check_edge_type(self, expr: ParserRuleContext) -> bool:
         assert (
             expr.getRuleIndex() == GraphParser.RULE_expr
         ), "check_edge_type accepts only 'expr' rule"
 
-        # (expr (edge_expr ...))
+        # 🐈🐈🐈
         edge_expr = self.__extract_value_from_expr(expr)
         rule_index = edge_expr.getRuleIndex()
 
         if rule_index == GraphParser.RULE_edge_expr:
-            left_num = self.__extract_value_from_expr(
-                edge_expr.getChild(1)
-            )  # (expr (num ...))
-            char = self.__extract_value_from_expr(edge_expr.getChild(3))
-            right_num = self.__extract_value_from_expr(edge_expr.getChild(5))
+            left_num = self.__get_expr_type(edge_expr.getChild(1))
+            char = self.__get_expr_type(edge_expr.getChild(3))
+            right_num = self.__get_expr_type(edge_expr.getChild(5))
 
             edge_check_result = (
-                self.__check_num_type(left_num)
-                and self.__check_char_type(char)
-                and self.__check_num_type(right_num)
+                left_num == GraphLangType.NUM
+                and char == GraphLangType.CHAR
+                and right_num == GraphLangType.NUM
             )
 
             return edge_check_result
-        elif rule_index == GraphParser.RULE_var:
-            return self.__check_var_type(edge_expr.getText(), GraphLangType.EDGE)
         else:
             return False
 
@@ -320,26 +324,6 @@ class GraphLangTyper:
             raise Exception(f'Variable "{var_name}" doesn\'t exist')
 
         return self.__variables.get_variable(var_name) == var_correct_type
-
-    def __check_num_type(self, num: ParserRuleContext) -> bool:
-        rule_index = num.getRuleIndex()
-
-        if rule_index == GraphParser.RULE_num:
-            return True
-        elif rule_index == GraphParser.RULE_var:
-            return self.__check_var_type(num.getText(), GraphLangType.NUM)
-        else:
-            return False
-
-    def __check_char_type(self, char: ParserRuleContext) -> bool:
-        rule_index = char.getRuleIndex()
-
-        if rule_index == GraphParser.RULE_char:
-            return True
-        elif rule_index == GraphParser.RULE_var:
-            return self.__check_var_type(char.getText(), GraphLangType.CHAR)
-        else:
-            return False
 
     def __extract_value_from_expr(self, expr: ParserRuleContext) -> ParserRuleContext:
         assert (

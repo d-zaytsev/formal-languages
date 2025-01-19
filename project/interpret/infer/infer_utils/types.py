@@ -1,5 +1,4 @@
 class GraphLangType:
-    VERTEX = "vertex"
     EDGE = "edge"
     NUM = "num"
     CHAR = "char"
