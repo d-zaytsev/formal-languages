@@ -165,8 +165,56 @@ class GraphLangTyper:
         elif expr_value_index == GraphParser.RULE_regexp:
             return self.__get_regexp_type(expr_value)
 
+        elif expr_value_index == GraphParser.RULE_select:
+            return self.__get_select_type(expr_value)
+
         else:
             raise f"Can't recognize rule: {expr_value.getText()}"
+
+    def __get_select_type(self, select: ParserRuleContext) -> GraphLangType:
+        assert (
+            select.getRuleIndex() == GraphParser.RULE_select
+        ), "select_stmt_infer accepts only 'select' rule"
+
+        # Check all v_filters
+        current_child_id = 0
+        while True:
+            child: ParserRuleContext = select.getChild(current_child_id)
+
+            if child.getRuleIndex() == GraphParser.RULE_v_filter:
+                current_vfilter_type = self.__get_vfilter_type(child)
+
+                if current_vfilter_type != GraphLangType.SET:
+                    raise f"Incorrect v_filter ({child.getText()}) type: '{current_vfilter_type}' instead of 'SET'."
+            else:
+                break
+
+        # Create new variables
+        # TODO
+        pass
+
+    def __get_vfilter_type(self, v_filter: ParserRuleContext) -> GraphLangType:
+        assert (
+            v_filter.getRuleIndex() == GraphParser.RULE_v_filter
+        ), "get_vfilter_type accepts only 'v_filter' rule"
+
+        var_name = v_filter.getChild(1).getText()
+
+        # Create new SET variable
+        if not self.__variables.contains_variable(var_name):
+            self.__variables.add_variable(var_name, GraphLangType.SET)
+        else:
+            raise Exception(f"Variable '{var_name}' already exists.")
+
+        filter_expr = v_filter.getChild(3)
+        filter_expr_type = self.__get_expr_type(filter_expr)
+
+        if filter_expr_type == GraphLangType.SET:
+            return GraphLangType.SET
+        else:
+            raise Exception(
+                f"Illegal filter expression type '{filter_expr_type}': '{filter_expr.getText()}'."
+            )
 
     def __get_regexp_type(self, regexp: ParserRuleContext) -> GraphLangType:
         assert (
