@@ -1,300 +1,161 @@
-from infer.infer_utils.types import VariableStore, VariablesPrinter, GraphLangType
-from parser.GraphParser import GraphParser
-from antlr4 import ParserRuleContext
+from project.interpret.infer.infer_utils.types import (
+    VariableStore,
+    VariablesPrinter,
+    GraphLangType,
+)
+from project.interpret.parser.GraphParser import GraphParser
+from project.interpret.parser.GraphVisitor import GraphVisitor
 
 
-class GraphLangTyper:
-    def __init__(self, graph_lang_tree: ParserRuleContext):
+class GraphLangTyper(GraphVisitor):
+    def __init__(self):
+        super(GraphVisitor, self).__init__()
         self.__variables = VariableStore()
-        self.__infer_result = True
-        self.__infer_error_message = None
-
-        try:
-            self.__program_infer(graph_lang_tree)
-        except Exception as ex:
-            self.__infer_result = False
-            self.__infer_error_message = str(ex)
-
-    def check_result(self) -> bool:
-        return self.__infer_result
-
-    def get_error_message(self) -> str:
-        if not self.__infer_error_message:
-            raise ValueError("Try to get error message when there is no error")
-
-        return self.__infer_error_message
+        self.__local_variables = VariableStore()
 
     def print_variables(self):
         VariablesPrinter(self.__variables).print()
 
-    def __program_infer(self, prog: ParserRuleContext):
-        # ctx = prog
-        statement = prog.children
+    def visitProg(self, ctx: GraphParser.ProgContext):
+        self.visitChildren(ctx)
 
-        for stmt in statement:
-            # traversal of all statements
+    def visitStmt(self, ctx: GraphParser.StmtContext):
+        self.visitChildren(ctx)
 
-            stmt_child: ParserRuleContext = stmt.getChild(0)
-            stmt_child_index: int = stmt_child.getRuleIndex()
-
-            if stmt_child_index == GraphParser.RULE_bind:
-                self.__bind_stmt_infer(stmt_child)
-            elif stmt_child_index == GraphParser.RULE_declare:
-                self.__declare_stmt_infer(stmt_child)
-            elif stmt_child_index == GraphParser.RULE_add:
-                self.__add_stmt_infer(stmt_child)
-            elif stmt_child_index == GraphParser.RULE_remove:
-                self.__remove_stmt_infer(stmt_child)
-            else:
-                raise Exception(f"Can't recognize statement {stmt_child.getText()}")
-
-    def __bind_stmt_infer(self, bind: ParserRuleContext):
-        assert (
-            bind.getRuleIndex() == GraphParser.RULE_bind
-        ), "bind infer accepts only 'bind' rule"
-
-        var_name: str = bind.getChild(1).getText()
-        bind_expr = bind.getChild(3)
-        bind_expr_type = self.__get_expr_type(bind_expr)
-
-        self.__variables.add_variable(var_name, bind_expr_type)
-
-    def __declare_stmt_infer(self, declare: ParserRuleContext):
-        var_name = declare.getChild(1).getText()
+    def visitDeclare(self, ctx: GraphParser.DeclareContext):
+        var_name = self.__get_var_name(ctx.var())
 
         self.__variables.add_variable(var_name, GraphLangType.GRAPH)
 
-    def __add_stmt_infer(self, add: ParserRuleContext):
-        assert (
-            add.getRuleIndex() == GraphParser.RULE_add
-        ), "add infer accepts only 'add' rule"
+    def visitAdd(self, ctx: GraphParser.AddContext):
+        # Check variable type
+        var_name = self.__get_var_name(ctx.var())
 
-        add_type_keyword = add.getChild(1).getText()  # 'edge' | 'vertex'
-        added_entity = add.getChild(2)
-        added_entity_type = self.__get_expr_type(added_entity)
-        var_name = add.getChild(4).getText()
-
-        if not self.__check_var_type(var_name, GraphLangType.GRAPH):
+        if self.visitVar(ctx.var()) != GraphLangType.GRAPH:
             raise Exception(
                 f"Variable '{var_name}' have to be GRAPH, not '{self.__variables.get_variable(var_name)}'!"
             )
 
-        if add_type_keyword == "edge":
-            if added_entity_type != GraphLangType.EDGE:
-                raise Exception(
-                    f"Illegal edge construction, it can't be added to '{var_name}'"
-                )
-        elif add_type_keyword == "vertex":
-            if added_entity_type != GraphLangType.NUM:
-                raise Exception(
-                    f"Illegal vertex construction, it can't be added to '{var_name}'"
-                )
-        else:
-            raise Exception("Can't recognize add keyword (vertex or edge?)")
+        # Check expr type
+        added_entity_type = self.visitExpr(ctx.expr())
 
-    def __remove_stmt_infer(self, remove: ParserRuleContext):
-        assert (
-            remove.getRuleIndex() == GraphParser.RULE_remove
-        ), "remove infer accepts only 'remove' rule"
-
-        remove_type_keyword = remove.getChild(
-            1
-        ).getText()  # 'edge' | 'vertex' | 'vertices'
-        removed_entity = remove.getChild(2)
-        removed_entity_type = self.__get_expr_type(removed_entity)
-        var_name = remove.getChild(4).getText()
-
-        if not self.__check_var_type(var_name, GraphLangType.GRAPH):
+        if ctx.EDGE() and added_entity_type != GraphLangType.EDGE:
             raise Exception(
-                f'Variable "{var_name}" have to be GRAPH, not {self.__variables.get_variable(var_name)}!'
+                f"Illegal edge construction, it can't be added to '{var_name}'."
+            )
+        elif ctx.VERTEX() and added_entity_type != GraphLangType.NUM:
+            raise Exception(
+                f"Illegal vertex construction, it can't be added to '{var_name}'."
+            )
+        else:
+            return
+
+    def visitRemove(self, ctx: GraphParser.RemoveContext):
+        # Check variable type
+        var_name = self.__get_var_name(ctx.var())
+        var_type = self.visitVar(ctx.var())
+
+        if var_type != GraphLangType.GRAPH:
+            raise Exception(
+                f"Variable '{var_name}' have to be GRAPH, not '{self.__variables.get_variable(var_name)}'!"
             )
 
-        if remove_type_keyword == "edge":
-            if removed_entity_type != GraphLangType.EDGE:
-                raise Exception(
-                    f"Illegal edge construction ({removed_entity.getText()}) , it can't be removed from '{var_name}'"
-                )
-        elif remove_type_keyword == "vertex":
-            if removed_entity_type != GraphLangType.NUM:
-                raise Exception(
-                    f"Illegal vertex construction ({removed_entity.getText()}), it can't be removed from '{var_name}'"
-                )
-        elif remove_type_keyword == "vertices":
-            if removed_entity_type != GraphLangType.SET:
-                raise Exception(
-                    f"Illegal vertices construction ({removed_entity.getText()}), it can't be removed from '{var_name}'"
-                )
+        # Check expr type
+        removed_entity_type = self.visitExpr(ctx.expr())
+
+        if ctx.EDGE() and removed_entity_type != GraphLangType.EDGE:
+            raise Exception(
+                f"Illegal edge construction, it can't be removed from '{var_name}'."
+            )
+        elif ctx.VERTEX() and removed_entity_type != GraphLangType.NUM:
+            raise Exception(
+                f"Illegal vertex construction, it can't be removed from '{var_name}'."
+            )
+        elif ctx.VERTICES() and removed_entity_type != GraphLangType.SET:
+            raise Exception(
+                f"Illegal vertices construction, it can't be removed from '{var_name}'"
+            )
         else:
-            raise Exception(f"Can't recognize remove keyword: {remove_type_keyword}")
+            return
 
-    def __get_expr_type(self, expr: ParserRuleContext) -> GraphLangType:
-        assert (
-            expr.getRuleIndex() == GraphParser.RULE_expr
-        ), f"get_expr_type accepts only 'expr' rule, not '{expr.getText()}'."
+    def visitBind(self, ctx: GraphParser.BindContext):
+        var_name: str = self.__get_var_name(ctx.var())
+        bind_expr_type = self.visitExpr(ctx.expr())
 
-        expr_value = self.__extract_value_from_expr(expr)
-        expr_value_index = expr_value.getRuleIndex()
+        self.__variables.add_variable(var_name, bind_expr_type)
 
-        if expr_value_index == GraphParser.RULE_num:
-            return GraphLangType.NUM
+    def visitExpr(self, ctx: GraphParser.ExprContext):
+        return self.visitChildren(ctx)
 
-        elif expr_value_index == GraphParser.RULE_char:
-            return GraphLangType.CHAR
+    def visitRegexp(self, ctx: GraphParser.RegexpContext) -> GraphLangType:
+        regexpInBrackets = ctx.L_PARENTHESIS() and ctx.R_PARENTHESIS()
 
-        elif expr_value_index == GraphParser.RULE_var:
-            var_name = expr_value.getText()
-            return self.__variables.get_variable(var_name)
+        if ctx.char():
+            return GraphLangType.FA
+        elif ctx.var():
+            var_name = self.__get_var_name(ctx.var())
 
-        elif expr_value_index == GraphParser.RULE_edge_expr:
-            edge_check_result = self.__check_edge_type(expr)
-
-            if not edge_check_result:
-                raise Exception(f"Incorrect edge construction: {expr_value.getText()}")
-            return GraphLangType.EDGE
-
-        elif expr_value_index == GraphParser.RULE_set_expr:
-            set_expr_check_result = self.__check_setexpr_type(expr)
-
-            if not set_expr_check_result:
-                raise Exception(
-                    f"Incorrect set expr construction: {expr_value.getText()}"
-                )
-
-            return GraphLangType.SET
-
-        elif expr_value_index == GraphParser.RULE_regexp:
-            return self.__get_regexp_type(expr_value)
-
-        elif expr_value_index == GraphParser.RULE_select:
-            return self.__get_select_type(expr_value)
-
-        else:
-            raise f"Can't recognize rule: {expr_value.getText()}"
-
-    def __get_select_type(self, select: ParserRuleContext) -> GraphLangType:
-        assert (
-            select.getRuleIndex() == GraphParser.RULE_select
-        ), "select_stmt_infer accepts only 'select' rule"
-
-        # Check all v_filters
-        current_child_id = 0
-        while True:
-            child: ParserRuleContext = select.getChild(current_child_id)
-
-            if child.getRuleIndex() == GraphParser.RULE_v_filter:
-                current_vfilter_type = self.__get_vfilter_type(child)
-
-                if current_vfilter_type != GraphLangType.SET:
-                    raise f"Incorrect v_filter ({child.getText()}) type: '{current_vfilter_type}' instead of 'SET'."
+            if not self.__variables.contain_variable(var_name):
+                return GraphLangType.RSM
             else:
-                break
+                var_type = self.visitVar(ctx.var())
 
-        # Create new variables
-        # TODO
-        pass
-
-    def __get_vfilter_type(self, v_filter: ParserRuleContext) -> GraphLangType:
-        assert (
-            v_filter.getRuleIndex() == GraphParser.RULE_v_filter
-        ), "get_vfilter_type accepts only 'v_filter' rule"
-
-        var_name = v_filter.getChild(1).getText()
-
-        # Create new SET variable
-        if not self.__variables.contains_variable(var_name):
-            self.__variables.add_variable(var_name, GraphLangType.SET)
-        else:
-            raise Exception(f"Variable '{var_name}' already exists.")
-
-        filter_expr = v_filter.getChild(3)
-        filter_expr_type = self.__get_expr_type(filter_expr)
-
-        if filter_expr_type == GraphLangType.SET:
-            return GraphLangType.SET
-        else:
-            raise Exception(
-                f"Illegal filter expression type '{filter_expr_type}': '{filter_expr.getText()}'."
-            )
-
-    def __get_regexp_type(self, regexp: ParserRuleContext) -> GraphLangType:
-        assert (
-            regexp.getRuleIndex() == GraphParser.RULE_regexp
-        ), "get_regexp_type accepts only 'expr' rule"
-
-        child_count = regexp.getChildCount()
-        # 🙂🙂🙂
-        if child_count == 1:  # CHAR | VAR_ID
-            regexp_value = regexp.getChild(0)
-            regexp_value_index = regexp.getChild(0).getRuleIndex()
-
-            if regexp_value_index == GraphParser.RULE_char:
-                return GraphLangType.FA
-            elif regexp_value_index == GraphParser.RULE_var:
-                var_name = regexp_value.getText()
-
-                if not self.__variables.contains_variable(var_name):
-                    return GraphLangType.RSM
-                elif self.__check_var_type(
-                    var_name, GraphLangType.CHAR
-                ) or self.__check_var_type(var_name, GraphLangType.FA):
+                if var_type in [GraphLangType.FA, GraphLangType.CHAR]:
                     return GraphLangType.FA
-                elif self.__check_var_type(var_name, GraphLangType.RSM):
+
+                elif var_type == GraphLangType.RSM:
                     return GraphLangType.RSM
+
                 else:
                     raise Exception(
-                        f"Illegal variable's type occured in regexp: '{var_name}'"
+                        f"Illegal variable type '{var_type}' occured in regexp: '{var_name}'"
                     )
-            else:
-                raise Exception(f"Can't recognize regexp: '{regexp_value.getText()}'")
 
-        elif (
-            child_count == 3
-            and regexp.getChild(0).getText() == "("
-            and regexp.getChild(2).getText() == ")"
-        ):
-            regexp_in_brackets = regexp.getChild(1)
-            return self.__get_regexp_type(regexp_in_brackets)
+        elif regexpInBrackets:
+            return self.visitRegexp(ctx.regexp(0))
+        else:
+            if ctx.CIRCUMFLEX():
+                left_regexp, range = ctx.regexp(0), ctx.range_()
 
-        elif child_count == 3:
-            operator: str = regexp.getChild(1).getText()
+                left_regexp_type = self.visitRegexp(left_regexp)
+                range_type = self.visitRange(range)
 
-            if operator == "^":
-                left_regexp, right_range_exp = regexp.getChild(0), regexp.getChild(2)
-
-                left_regexp_type = self.__get_regexp_type(left_regexp)
-
-                if right_range_exp.getRuleIndex() != GraphParser.RULE_range:
-                    raise f"Type with {right_range_exp} index can't be used in Repeat (^) operation."
+                if range_type != GraphLangType.RANGE:
+                    raise Exception(
+                        f"Illegal type in regexp: '{range_type}' instead of '{GraphLangType.RANGE}"
+                    )
 
                 if left_regexp_type == GraphLangType.FA:
                     return GraphLangType.FA
                 elif left_regexp_type == GraphLangType.RSM:
                     return GraphLangType.RSM
                 else:
-                    raise f"Type {left_regexp_type} can't be in Repeat (^) operation."
+                    raise Exception(
+                        f"Type '{left_regexp_type}' can't be in Repeat (^) operation."
+                    )
 
             else:
-                left_regexp, right_regexp = regexp.getChild(0), regexp.getChild(2)
+                left_regexp, right_regexp = ctx.regexp(0), ctx.regexp(1)
 
                 left_regexp_type, right_regexp_type = (
-                    self.__get_regexp_type(left_regexp),
-                    self.__get_regexp_type(right_regexp),
+                    self.visitRegexp(left_regexp),
+                    self.visitRegexp(right_regexp),
                 )
 
-                if operator in ["|", "."]:
+                if ctx.PIPE() or ctx.DOT():
                     return (
                         GraphLangType.RSM
                         if left_regexp_type == GraphLangType.RSM
                         or right_regexp_type == GraphLangType.RSM
                         else GraphLangType.FA
                     )
-                elif operator == "&":
+                elif ctx.AMPERSAND():
                     if (
                         left_regexp_type == GraphLangType.RSM
                         and right_regexp_type == GraphLangType.RSM
                     ):
                         raise Exception(
-                            f'Can\'t intersect two RSMs: "{regexp.getText()}".'
+                            f'Can\'t intersect two RSMs: "{ctx.getText()}".'
                         )
 
                     return (
@@ -304,71 +165,122 @@ class GraphLangTyper:
                         else GraphLangType.FA
                     )
 
-        else:
-            raise Exception("Can't recognize regexp type")
-
         return GraphLangType.UNKNOWN
 
-    def __check_setexpr_type(self, expr: ParserRuleContext) -> bool:
-        assert (
-            expr.getRuleIndex() == GraphParser.RULE_expr
-        ), "check_set_expr_type accepts only 'expr' rule"
+    def visitSelect(self, ctx: GraphParser.SelectContext):
+        # Check v_filters
+        v_filter_1, v_filter_2 = ctx.v_filter(0), ctx.v_filter(1)
 
-        # 🐈🐈🐈
-        set_expr = self.__extract_value_from_expr(expr)
-        rule_index = set_expr.getRuleIndex()
+        if v_filter_1 and self.visitV_filter(v_filter_1) != GraphLangType.SET:
+            raise Exception(f"Incorrect type for: '{v_filter_1.getText()}'")
+        if v_filter_2 and self.visitV_filter(v_filter_2) != GraphLangType.SET:
+            raise Exception(f"Incorrect type for: '{v_filter_2.getText()}'")
 
-        if rule_index == GraphParser.RULE_set_expr:
-            first_num_id = 1
-            last_num_id = set_expr.getChildCount() - 1
+        # Check vars
+        var_list: list = ctx.var()
 
-            for child_id in range(first_num_id, last_num_id):
-                child = set_expr.getChild(child_id)
+        in_var = self.__get_var_name(var_list[-1])
+        from_var = self.__get_var_name(var_list[-2])
+        where_var = self.__get_var_name(var_list[-3])
 
-                if child.getText() == ",":
-                    continue
-
-                if self.__get_expr_type(child) != GraphLangType.NUM:
-                    return False
-
-            return True
-        else:
-            return False
-
-    def __check_edge_type(self, expr: ParserRuleContext) -> bool:
-        assert (
-            expr.getRuleIndex() == GraphParser.RULE_expr
-        ), "check_edge_type accepts only 'expr' rule"
-
-        # 🐈🐈🐈
-        edge_expr = self.__extract_value_from_expr(expr)
-        rule_index = edge_expr.getRuleIndex()
-
-        if rule_index == GraphParser.RULE_edge_expr:
-            left_num = self.__get_expr_type(edge_expr.getChild(1))
-            char = self.__get_expr_type(edge_expr.getChild(3))
-            right_num = self.__get_expr_type(edge_expr.getChild(5))
-
-            edge_check_result = (
-                left_num == GraphLangType.NUM
-                and char == GraphLangType.CHAR
-                and right_num == GraphLangType.NUM
+        if self.__variables.get_variable(in_var) != GraphLangType.GRAPH:
+            raise Exception(
+                f"Incorrect type of variable '{in_var}', it should be '{GraphLangType.GRAPH}'."
             )
 
-            return edge_check_result
+        if self.__local_variables.contain_variable(from_var):
+            if self.__local_variables.get_variable(from_var) != GraphLangType.SET:
+                raise Exception(
+                    f"Incorrect type of variable '{from_var}', it should be '{GraphLangType.GRAPH}'."
+                )
         else:
-            return False
+            self.__local_variables.add_variable(from_var, GraphLangType.SET)
 
-    def __check_var_type(self, var_name: str, var_correct_type: GraphLangType) -> bool:
-        """Check if variable exists in environment and if it has correct type."""
-        if not self.__variables.contains_variable(var_name):
-            raise Exception(f'Variable "{var_name}" doesn\'t exist')
+        if self.__local_variables.contain_variable(where_var):
+            raise Exception(f"Variable '{where_var}' already exists.")
+        else:
+            self.__local_variables.add_variable(where_var, GraphLangType.SET)
 
-        return self.__variables.get_variable(var_name) == var_correct_type
+        # Check result vars
+        result_var_1 = self.__get_var_name(var_list[0])
+        result_var_2 = self.__get_var_name(var_list[1]) if ctx.COMMA() else None
 
-    def __extract_value_from_expr(self, expr: ParserRuleContext) -> ParserRuleContext:
-        assert (
-            expr.getRuleIndex() == GraphParser.RULE_expr
-        ), "__extract_value_from_expr got something different from 'expr' type"
+        if (
+            not self.__local_variables.contain_variable(result_var_1)
+        ) or self.__local_variables.get_variable(result_var_1) != GraphLangType.SET:
+            raise Exception(f"Inappropriate variable '{result_var_1}'.")
 
-        return expr.getChild(0)
+        if result_var_2 and (
+            not self.__local_variables.contain_variable(result_var_2)
+            or self.__local_variables.get_variable(result_var_2) != GraphLangType.SET
+        ):
+            raise Exception(f"Inappropriate variable '{result_var_2}'.")
+
+        # check expr
+        expr_type = self.visitExpr(ctx.expr())
+
+        if expr_type not in [GraphLangType.FA, GraphLangType.RSM]:
+            raise Exception(f"Illegal expression in SELECT with type '{expr_type}'.")
+
+        self.__local_variables.clear()
+        return GraphLangType.SET if not result_var_2 else GraphLangType.PAIR_SET
+
+    def visitV_filter(self, ctx: GraphParser.V_filterContext):
+        var_name = self.__get_var_name(ctx.var())
+
+        # Create new SET variable
+        if not self.__variables.contain_variable(var_name):
+            self.__local_variables.add_variable(var_name, GraphLangType.SET)
+        else:
+            raise Exception(f"Variable '{var_name}' already exists.")
+
+        expr_type = self.visitExpr(ctx.expr())
+
+        if expr_type == GraphLangType.SET:
+            return GraphLangType.SET
+        else:
+            raise Exception(
+                f"Illegal filter expression of type '{expr_type}': '{ctx.getText()}'."
+            )
+
+    def visitSet_expr(self, ctx: GraphParser.Set_exprContext) -> GraphLangType:
+        exprs = ctx.expr()
+
+        for expr in exprs:
+            if self.visitExpr(expr) != GraphLangType.NUM:
+                raise Exception(f"Illegal construction in RANGE: '{expr.getText()}'")
+
+        return GraphLangType.SET
+
+    def visitEdge_expr(self, ctx: GraphParser.Edge_exprContext):
+        edge_exprs = ctx.expr()
+
+        left_num_check = self.visitExpr(edge_exprs[0]) == GraphLangType.NUM
+        char_check = self.visitExpr(edge_exprs[1]) == GraphLangType.CHAR
+        right_num_check = self.visitExpr(edge_exprs[2]) == GraphLangType.NUM
+
+        edge_check = left_num_check and char_check and right_num_check
+
+        if edge_check:
+            return GraphLangType.EDGE
+        else:
+            raise Exception(f"Illegal EDGE construction: '{ctx.getText()}'")
+
+    def __get_var_name(self, ctx: GraphParser.VarContext) -> str:
+        return str(ctx.VAR_ID().getText())
+
+    def visitRange(self, ctx: GraphParser.RangeContext) -> GraphLangType:
+        return GraphLangType.RANGE
+
+    def visitNum(self, ctx: GraphParser.NumContext) -> GraphLangType:
+        return GraphLangType.NUM
+
+    def visitChar(self, ctx: GraphParser.CharContext) -> GraphLangType:
+        return GraphLangType.CHAR
+
+    def visitVar(self, ctx: GraphParser.VarContext) -> GraphLangType:
+        var_name = self.__get_var_name(ctx)
+        if not self.__variables.contain_variable(var_name):
+            raise Exception(f"Variable '{var_name}' doesn't exist.")
+
+        return self.__variables.get_variable(var_name)
