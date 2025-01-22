@@ -9,8 +9,9 @@ from parser.GraphParser import GraphParser
 from antlr4.error.ErrorListener import ErrorListener
 
 # from infer.graph_typing import GraphTyping
-from utils.listener import NodesCountListener, ProgramTextListener
-from infer.typechecker import GraphLangTyper
+from utils.listeners import NodesCountListener, ProgramTextListener
+from typechecker.typechecker import GraphLangTyper
+from runner.runner import GraphLangRunner
 
 
 class MyErrorListener(ErrorListener):
@@ -54,7 +55,19 @@ def tree_to_program(tree: ParserRuleContext) -> str:
 
 
 def typing_program(program: str) -> bool:
-    pass
+    lexer = GraphLexer(InputStream(program))
+    stream = CommonTokenStream(lexer)
+    parser = GraphParser(stream)
+
+    tree = parser.prog()
+    types_visitor = GraphLangTyper()
+
+    try:
+        types_visitor.visit(tree)
+
+        return True
+    except Exception:
+        return False
 
 
 def exec_program(program: str) -> dict[str, set[tuple]]:
@@ -73,16 +86,34 @@ if __name__ == "__main__":
         parser = GraphParser(stream)
 
         tree = parser.prog()
-        typer = GraphLangTyper(tree)
 
-        infer_result = typer.check_result()
+        types_visitor = GraphLangTyper()
+        typecheck_result = "Good!"
+
+        runner_visitor = GraphLangRunner()
+        runner_error_msg = None
+
+        try:
+            types_visitor.visit(tree)
+        except Exception as ex:
+            typecheck_result = str(ex)
+
+        try:
+            runner_visitor.visit(tree)
+        except Exception as ex:
+            runner_error_msg = str(ex)
 
         print("Length:", nodes_count(tree))
         print("Recovered text:", tree_to_program(tree))
-        print("Typechecker:", "Good!" if infer_result else typer.get_error_message())
+        print("Typechecker:", typecheck_result)
 
         print("---")
-        print("Result:", tree.toStringTree(recog=parser))
-        print("Inferred variables:")
-        typer.print_variables()
+        print("Parser:", tree.toStringTree(recog=parser))
+
+        print("Runner:", runner_error_msg if runner_error_msg else "")
+        if not runner_error_msg:
+            runner_visitor.printVariables()
+
+        print("Typecheker:")
+        types_visitor.printVariables()
         print()

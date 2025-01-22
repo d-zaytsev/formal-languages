@@ -1,10 +1,10 @@
-from project.interpret.infer.infer_utils.types import (
+from typechecker.utils.types import (
     VariableStore,
     VariablesPrinter,
     GraphLangType,
 )
-from project.interpret.parser.GraphParser import GraphParser
-from project.interpret.parser.GraphVisitor import GraphVisitor
+from parser.GraphParser import GraphParser
+from parser.GraphVisitor import GraphVisitor
 
 
 class GraphLangTyper(GraphVisitor):
@@ -13,7 +13,7 @@ class GraphLangTyper(GraphVisitor):
         self.__variables = VariableStore()
         self.__local_variables = VariableStore()
 
-    def print_variables(self):
+    def printVariables(self):
         VariablesPrinter(self.__variables).print()
 
     def visitProg(self, ctx: GraphParser.ProgContext):
