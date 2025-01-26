@@ -84,7 +84,7 @@ def repeat_range(
 
 def group(nfa: EpsilonNFA) -> EpsilonNFA:
     """( regex )"""
-    return EpsilonNFA(Regex(f"({nfa.minimize().to_regex()})"))
+    return Regex(f"({nfa.minimize().to_regex()})").to_epsilon_nfa()
 
 
 START_TERMINAL_NAME = "START"
