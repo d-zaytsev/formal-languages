@@ -22,10 +22,10 @@ edge_expr : L_PARENTHESIS expr COMMA expr COMMA expr R_PARENTHESIS ;
 regexp: char
         | var
         | L_PARENTHESIS regexp R_PARENTHESIS
-        | regexp PIPE regexp
         | regexp CIRCUMFLEX range
+        | regexp AMPERSAND regexp
         | regexp DOT regexp
-        | regexp AMPERSAND regexp;
+        | regexp PIPE regexp;
 
 range : L_SQ_BRACKET num ELLIPSIS? num? R_SQ_BRACKET ;
 

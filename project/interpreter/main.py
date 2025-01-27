@@ -4,14 +4,14 @@ from antlr4 import (
     InputStream,
     ParseTreeWalker,
 )
-from parser.GraphLexer import GraphLexer
-from parser.GraphParser import GraphParser
+from project.interpreter.parser.GraphLexer import GraphLexer
+from project.interpreter.parser.GraphParser import GraphParser
 from antlr4.error.ErrorListener import ErrorListener
 
 # from infer.graph_typing import GraphTyping
-from utils.listeners import NodesCountListener, ProgramTextListener
-from typechecker.typechecker import GraphLangTyper
-from runner.runner import GraphLangRunner
+from project.interpreter.utils.listeners import NodesCountListener, ProgramTextListener
+from project.interpreter.typechecker.typechecker import GraphLangTyper
+from project.interpreter.runner.runner import GraphLangRunner
 
 
 class MyErrorListener(ErrorListener):
@@ -34,9 +34,7 @@ def program_to_tree(program: str) -> tuple[ParserRuleContext, bool]:
         tree = parser.prog()
 
         return (tree, True)
-    except Exception as e:
-        print(e)
-
+    except Exception:
         return (None, False)
 
 
@@ -81,9 +79,9 @@ def exec_program(program: str) -> dict[str, set[tuple]]:
     try:
         runner_visitor.visit(tree)
 
-        return True
+        return runner_visitor.last_query_results
     except Exception:
-        return False
+        return {}
 
 
 if __name__ == "__main__":
@@ -113,13 +111,13 @@ if __name__ == "__main__":
         # try:
         runner_visitor.visit(tree)
         # except Exception as ex:
-        #     runner_error_msg = str(ex)
+        # runner_error_msg = str(ex)
 
-        print("Length:", nodes_count(tree))
-        print("Recovered text:", tree_to_program(tree))
+        # print("Length:", nodes_count(tree))
+        # print("Recovered text:", tree_to_program(tree))
 
         print("---")
-        print("Parser:", tree.toStringTree(recog=parser))
+        # print("Parser:", tree.toStringTree(recog=parser))
 
         print("Typecheker:", typecheck_result if typecheck_result else "")
         if not typecheck_result:

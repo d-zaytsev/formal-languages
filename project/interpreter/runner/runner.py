@@ -1,9 +1,9 @@
-from parser.GraphParser import GraphParser
-from parser.GraphVisitor import GraphVisitor
+from project.interpreter.parser.GraphParser import GraphParser
+from project.interpreter.parser.GraphVisitor import GraphVisitor
 from typing import Tuple, Set, Optional
 from networkx import MultiDiGraph
 from pyformlang.finite_automaton import EpsilonNFA
-from runner.regexp import (
+from project.interpreter.runner.regexp import (
     nfa_from_char,
     nfa_from_var,
     group,
@@ -23,6 +23,10 @@ class GraphLangRunner(GraphVisitor):
         self.__query_results = {}
         # Special for adding new query results
         self.__query_was_completed = False
+
+    @property
+    def last_query_results(self):
+        return self.__query_results.copy()
 
     def printVariables(self):
         if not self.__variables:
@@ -79,7 +83,9 @@ class GraphLangRunner(GraphVisitor):
                     self.visitRange(ctx.range_()),
                 )
 
-                return repeat_range(left_regexp, range[0], range[1])
+                return repeat_range(
+                    left_regexp, self.visitNum(range[0]), self.visitNum(range[1])
+                )
             else:
                 left_regexp, right_regexp = (
                     self.visitRegexp(ctx.regexp(0)),
@@ -95,12 +101,13 @@ class GraphLangRunner(GraphVisitor):
 
     def visitSelect(self, ctx: GraphParser.SelectContext):
         # for v in [start_set_expr]
-        start_nodes_name, start_nodes_set = self.visitV_filter(ctx.v_filter(0))
+        for_var_name_1, for_nodes_set_1 = self.visitV_filter(ctx.v_filter(0))
         # for u in [final_set_expr]
-        final_nodes_name, final_nodes_set = self.visitV_filter(ctx.v_filter(1))
+        for_var_name_2, for_nodes_set_2 = self.visitV_filter(ctx.v_filter(1))
 
         # ... IN <graph> ...
-        graph: MultiDiGraph = self.visitVar(ctx.var()[-1])
+        var_list = ctx.var()
+        graph: MultiDiGraph = self.visitVar(var_list[-1])
 
         nfa_subs_dict: dict[str, EpsilonNFA] = {
             key: value
@@ -110,40 +117,48 @@ class GraphLangRunner(GraphVisitor):
 
         query = build_rsm(self.__expr_to_nfa(ctx.expr()), nfa_subs_dict)
 
-        cfpq_result = tensor_based_cfpq(query, graph, start_nodes_set, final_nodes_set)
+        start_var_name = self.__get_var_name(var_list[-2])
+        final_var_name = self.__get_var_name(var_list[-3])
+
+        start_nodes, final_nodes = None, None
+
+        # get start/final nodes from FOR:
+
+        # for v in ... from v ...
+        if start_var_name == for_var_name_1:
+            start_nodes = for_nodes_set_1
+        # for v in ... from u ...
+        else:
+            start_nodes = for_var_name_2
+        # for v in ... where v ...
+        if final_var_name == for_var_name_2:
+            final_nodes = for_nodes_set_2
+        # for v in ... where u ...
+        else:
+            final_nodes = for_var_name_1
+
+        cfpq_result = tensor_based_cfpq(query, graph, start_nodes, final_nodes)
         select_result = set()
 
-        # return frv, srv
-        frv = ctx.var(0).getText()
-        srv = ctx.var(1).getText()
+        # return first_return_var, second_return_var
+        first_return_var = ctx.var(0).getText()
+        second_return_var = ctx.var(1).getText()
 
         # return <start>, <final> where <final> reachable from <start>
         start_var_name = ctx.var()[-2].getText()
         final_var_name = ctx.var()[-3].getText()
 
-        # return v
-        if frv in [start_nodes_name, start_var_name] and not srv:
+        # return <start>
+        if first_return_var == start_var_name and not second_return_var:
             for res in cfpq_result:
                 select_result.add(res[0])
-        # return u
-        elif frv in [final_nodes_name, final_var_name] and not srv:
+        # return <final>
+        elif first_return_var == final_var_name and not second_return_var:
             for res in cfpq_result:
                 select_result.add(res[1])
-        # return u, v
-        elif frv in [start_nodes_name, start_var_name] and srv in [
-            final_nodes_name,
-            final_var_name,
-        ]:
-            select_result = cfpq_result
-        # return v, u
-        elif frv in [final_nodes_name, final_var_name] and srv in [
-            start_nodes_name,
-            start_var_name,
-        ]:
-            for res in cfpq_result:
-                select_result.add((res[1], res[0]))
+        # return <start>, <final>
         else:
-            raise Exception("O_O")
+            select_result = cfpq_result
 
         # Mark that for BIND
         self.__query_was_completed = True
@@ -219,7 +234,7 @@ class GraphLangRunner(GraphVisitor):
 
     def visitChar(self, ctx: GraphParser.CharContext):
         return str(ctx.CHAR().getText()[1])
-    
+
     def __expr_to_nfa(self, ctx: GraphParser.ExprContext) -> EpsilonNFA:
         expr_value = self.visitExpr(ctx)
 
@@ -228,7 +243,9 @@ class GraphLangRunner(GraphVisitor):
         elif isinstance(expr_value, str):
             return nfa_from_char(expr_value)
         else:
-            raise Exception(f"illegal type '{expr_value}', it can't be coverted to EpsilonNFA.")
+            raise Exception(
+                f"illegal type '{expr_value}', it can't be coverted to EpsilonNFA."
+            )
 
     def __get_var_name(self, ctx: GraphParser.VarContext) -> str:
         return str(ctx.VAR_ID().getText())
