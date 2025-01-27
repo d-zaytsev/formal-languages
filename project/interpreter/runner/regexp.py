@@ -92,7 +92,7 @@ START_TERMINAL_NAME = "START"
 
 def build_rsm(nfa: EpsilonNFA, subs_dict: dict[str, EpsilonNFA]) -> RecursiveAutomaton:
     boxes = []
-    
+
     for var_name, var_nfa in subs_dict.items():
         boxes.append(Box(var_nfa, Symbol(var_name.upper())))
 

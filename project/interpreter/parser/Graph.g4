@@ -23,9 +23,9 @@ regexp: char
         | var
         | L_PARENTHESIS regexp R_PARENTHESIS
         | regexp CIRCUMFLEX range
-        | regexp AMPERSAND regexp
         | regexp DOT regexp
-        | regexp PIPE regexp;
+        | regexp PIPE regexp
+        | regexp AMPERSAND regexp;
 
 range : L_SQ_BRACKET num ELLIPSIS? num? R_SQ_BRACKET ;
 

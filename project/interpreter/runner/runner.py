@@ -109,11 +109,13 @@ class GraphLangRunner(GraphVisitor):
         var_list = ctx.var()
         graph: MultiDiGraph = self.visitVar(var_list[-1])
 
-        nfa_subs_dict: dict[str, EpsilonNFA] = {
-            key: value
-            for key, value in self.__variables.items()
-            if isinstance(value, EpsilonNFA)
-        }
+        nfa_subs_dict: dict[str, EpsilonNFA] = {}
+
+        for key, value in self.__variables.items():
+            if isinstance(value, EpsilonNFA):
+                nfa_subs_dict[key] = value
+            elif isinstance(value, str):
+                nfa_subs_dict[key] = nfa_from_char(value)
 
         query = build_rsm(self.__expr_to_nfa(ctx.expr()), nfa_subs_dict)
 
