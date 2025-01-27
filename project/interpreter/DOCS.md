@@ -120,7 +120,7 @@ Recovered text: let q is graph let d = "a" | "b"
 ---
 Parser: (prog (stmt (declare let (var q) is graph)) (stmt (bind let (var d) = (expr (regexp (regexp (char "a")) | (regexp (char "b")))))))
 Typecheker: Good!
-Runner: 
+Runner:
     q ~> MultiDiGraph with 0 nodes and 0 edges
     d ~> <finite_automaton>
 ```
