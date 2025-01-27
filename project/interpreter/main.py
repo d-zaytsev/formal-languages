@@ -71,7 +71,19 @@ def typing_program(program: str) -> bool:
 
 
 def exec_program(program: str) -> dict[str, set[tuple]]:
-    pass
+    lexer = GraphLexer(InputStream(program))
+    stream = CommonTokenStream(lexer)
+    parser = GraphParser(stream)
+
+    tree = parser.prog()
+    runner_visitor = GraphLangRunner()
+
+    try:
+        runner_visitor.visit(tree)
+
+        return True
+    except Exception:
+        return False
 
 
 if __name__ == "__main__":
