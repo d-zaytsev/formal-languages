@@ -5,7 +5,7 @@ from project.interpreter.typechecker.utils.types import (
 )
 from project.interpreter.parser.GraphParser import GraphParser
 from project.interpreter.parser.GraphVisitor import GraphVisitor
-from typing import Tuple
+
 
 class GraphLangTyper(GraphVisitor):
     def __init__(self):
@@ -168,8 +168,8 @@ class GraphLangTyper(GraphVisitor):
 
     def visitSelect(self, ctx: GraphParser.SelectContext):
         # Check v_filters
-        start_var_name = self.visitV_filter(ctx.v_filter(0))
-        final_var_name = self.visitV_filter(ctx.v_filter(1))
+        self.visitV_filter(ctx.v_filter(0))
+        self.visitV_filter(ctx.v_filter(1))
 
         # Check vars
         var_list: list = ctx.var()
@@ -179,33 +179,21 @@ class GraphLangTyper(GraphVisitor):
         where_var = self.__get_var_name(var_list[-3])
 
         if self.__variables.get_variable(in_var) != GraphLangType.GRAPH:
-            raise Exception(
-                f"Incorrect type of variable '{in_var}', it should be '{GraphLangType.GRAPH}'."
-            )
-
-        # variable defined in FOR and not equal to "from" variable
-        if start_var_name and from_var != start_var_name:
-            raise Exception(f"Variable '{start_var_name}' is defined in FOR, but FROM use '{from_var}' variable instead of it.")
-        # variable isn't defined in FOR
-        elif not start_var_name:
-            start_var_name = from_var
-
-        # variable defined in FOR and not equal to "where" variable
-        if final_var_name and where_var != final_var_name:
-            raise Exception(f"Variable '{final_var_name}' is defined in FOR, but WHERE use '{where_var}' variable instead of it.")
-        # variable isn't defined in FOR
-        elif not final_var_name:
-            final_var_name = where_var
+            raise Exception(f"Variable '{in_var}' should be graph!")
 
         # Check result vars
         result_var_1 = self.__get_var_name(var_list[0])
         result_var_2 = self.__get_var_name(var_list[1]) if ctx.COMMA() else None
 
-        if result_var_1 not in [start_var_name, final_var_name]:
-            raise Exception(f"Result variable '{result_var_1}' should be '{start_var_name}' or '{final_var_name}'.")
+        if result_var_1 not in [where_var, from_var]:
+            raise Exception(
+                f"Result variable '{result_var_1}' should be '{from_var}' or '{where_var}'."
+            )
 
-        if result_var_2 and (result_var_1 not in [start_var_name, final_var_name]):
-            raise Exception(f"Result variable '{result_var_2}' should be '{start_var_name}' or '{final_var_name}'.")
+        if result_var_2 and (result_var_1 not in [where_var, from_var]):
+            raise Exception(
+                f"Result variable '{result_var_2}' should be '{from_var}' or '{where_var}'."
+            )
 
         # check expr
         expr_type = self.visitExpr(ctx.expr())
@@ -218,7 +206,7 @@ class GraphLangTyper(GraphVisitor):
     def visitV_filter(self, ctx: GraphParser.V_filterContext) -> str:
         if not ctx:
             return None
-        
+
         var_name = self.__get_var_name(ctx.var())
 
         # Create new SET variable
