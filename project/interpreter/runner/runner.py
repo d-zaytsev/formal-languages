@@ -108,7 +108,7 @@ class GraphLangRunner(GraphVisitor):
             if isinstance(value, EpsilonNFA)
         }
 
-        query = build_rsm(self.visitExpr(ctx.expr()), nfa_subs_dict)
+        query = build_rsm(self.__expr_to_nfa(ctx.expr()), nfa_subs_dict)
 
         cfpq_result = tensor_based_cfpq(query, graph, start_nodes_set, final_nodes_set)
         select_result = set()
@@ -155,7 +155,7 @@ class GraphLangRunner(GraphVisitor):
             return (None, None)
 
         var_name = ctx.var().getText()
-        set_expr = self.visitSet_expr(ctx.expr())
+        set_expr = self.visitExpr(ctx.expr())
 
         return (var_name, set_expr)
 
@@ -219,6 +219,16 @@ class GraphLangRunner(GraphVisitor):
 
     def visitChar(self, ctx: GraphParser.CharContext):
         return str(ctx.CHAR().getText()[1])
+    
+    def __expr_to_nfa(self, ctx: GraphParser.ExprContext) -> EpsilonNFA:
+        expr_value = self.visitExpr(ctx)
+
+        if isinstance(expr_value, EpsilonNFA):
+            return expr_value
+        elif isinstance(expr_value, str):
+            return nfa_from_char(expr_value)
+        else:
+            raise Exception(f"illegal type '{expr_value}', it can't be coverted to EpsilonNFA.")
 
     def __get_var_name(self, ctx: GraphParser.VarContext) -> str:
         return str(ctx.VAR_ID().getText())
