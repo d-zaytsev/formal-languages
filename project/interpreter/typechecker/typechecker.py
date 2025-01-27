@@ -1,17 +1,16 @@
-from typechecker.utils.types import (
+from project.interpreter.typechecker.utils.types import (
     VariableStore,
     VariablesPrinter,
     GraphLangType,
 )
-from parser.GraphParser import GraphParser
-from parser.GraphVisitor import GraphVisitor
-
+from project.interpreter.parser.GraphParser import GraphParser
+from project.interpreter.parser.GraphVisitor import GraphVisitor
+from typing import Tuple
 
 class GraphLangTyper(GraphVisitor):
     def __init__(self):
         super(GraphVisitor, self).__init__()
         self.__variables = VariableStore()
-        self.__local_variables = VariableStore()
 
     def printVariables(self):
         VariablesPrinter(self.__variables).print()
@@ -169,12 +168,8 @@ class GraphLangTyper(GraphVisitor):
 
     def visitSelect(self, ctx: GraphParser.SelectContext):
         # Check v_filters
-        v_filter_1, v_filter_2 = ctx.v_filter(0), ctx.v_filter(1)
-
-        if v_filter_1 and self.visitV_filter(v_filter_1) != GraphLangType.SET:
-            raise Exception(f"Incorrect type for: '{v_filter_1.getText()}'")
-        if v_filter_2 and self.visitV_filter(v_filter_2) != GraphLangType.SET:
-            raise Exception(f"Incorrect type for: '{v_filter_2.getText()}'")
+        start_var_name = self.visitV_filter(ctx.v_filter(0))
+        final_var_name = self.visitV_filter(ctx.v_filter(1))
 
         # Check vars
         var_list: list = ctx.var()
@@ -188,59 +183,57 @@ class GraphLangTyper(GraphVisitor):
                 f"Incorrect type of variable '{in_var}', it should be '{GraphLangType.GRAPH}'."
             )
 
-        if self.__local_variables.contain_variable(from_var):
-            if self.__local_variables.get_variable(from_var) != GraphLangType.SET:
-                raise Exception(
-                    f"Incorrect type of variable '{from_var}', it should be '{GraphLangType.GRAPH}'."
-                )
-        else:
-            self.__local_variables.add_variable(from_var, GraphLangType.SET)
+        # variable defined in FOR and not equal to "from" variable
+        if start_var_name and from_var != start_var_name:
+            raise Exception(f"Variable '{start_var_name}' is defined in FOR, but FROM use '{from_var}' variable instead of it.")
+        # variable isn't defined in FOR
+        elif not start_var_name:
+            start_var_name = from_var
 
-        if self.__local_variables.contain_variable(where_var):
-            raise Exception(f"Variable '{where_var}' already exists.")
-        else:
-            self.__local_variables.add_variable(where_var, GraphLangType.SET)
+        # variable defined in FOR and not equal to "where" variable
+        if final_var_name and where_var != final_var_name:
+            raise Exception(f"Variable '{final_var_name}' is defined in FOR, but WHERE use '{where_var}' variable instead of it.")
+        # variable isn't defined in FOR
+        elif not final_var_name:
+            final_var_name = where_var
 
         # Check result vars
         result_var_1 = self.__get_var_name(var_list[0])
         result_var_2 = self.__get_var_name(var_list[1]) if ctx.COMMA() else None
 
-        if (
-            not self.__local_variables.contain_variable(result_var_1)
-        ) or self.__local_variables.get_variable(result_var_1) != GraphLangType.SET:
-            raise Exception(f"Inappropriate variable '{result_var_1}'.")
+        if result_var_1 not in [start_var_name, final_var_name]:
+            raise Exception(f"Result variable '{result_var_1}' should be '{start_var_name}' or '{final_var_name}'.")
 
-        if result_var_2 and (
-            not self.__local_variables.contain_variable(result_var_2)
-            or self.__local_variables.get_variable(result_var_2) != GraphLangType.SET
-        ):
-            raise Exception(f"Inappropriate variable '{result_var_2}'.")
+        if result_var_2 and (result_var_1 not in [start_var_name, final_var_name]):
+            raise Exception(f"Result variable '{result_var_2}' should be '{start_var_name}' or '{final_var_name}'.")
 
         # check expr
         expr_type = self.visitExpr(ctx.expr())
 
-        if expr_type not in [GraphLangType.FA, GraphLangType.RSM]:
+        if expr_type not in [GraphLangType.FA, GraphLangType.RSM, GraphLangType.CHAR]:
             raise Exception(f"Illegal expression in SELECT with type '{expr_type}'.")
 
-        self.__local_variables.clear()
         return GraphLangType.SET if not result_var_2 else GraphLangType.PAIR_SET
 
-    def visitV_filter(self, ctx: GraphParser.V_filterContext):
+    def visitV_filter(self, ctx: GraphParser.V_filterContext) -> str:
+        if not ctx:
+            return None
+        
         var_name = self.__get_var_name(ctx.var())
 
         # Create new SET variable
-        if not self.__variables.contain_variable(var_name):
-            self.__local_variables.add_variable(var_name, GraphLangType.SET)
-        else:
-            raise Exception(f"Variable '{var_name}' already exists.")
+        if self.__variables.contain_variable(var_name):
+            raise Exception(
+                f"Variable '{var_name}' already exists in global context. It can't be used in FOR."
+            )
 
         expr_type = self.visitExpr(ctx.expr())
 
         if expr_type == GraphLangType.SET:
-            return GraphLangType.SET
+            return var_name
         else:
             raise Exception(
-                f"Illegal filter expression of type '{expr_type}': '{ctx.getText()}'."
+                f"Filter expression has type '{expr_type}': '{ctx.getText()}'."
             )
 
     def visitSet_expr(self, ctx: GraphParser.Set_exprContext) -> GraphLangType:
